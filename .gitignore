@@ -1,0 +1,4 @@
+aprsfi.py
+secrets.py
+*.pyc
+*.pyo
