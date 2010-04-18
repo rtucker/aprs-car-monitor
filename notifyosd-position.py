@@ -112,7 +112,7 @@ for i in response['entries']:
     i['kilometers_from_home'] = i['meters_from_home']/1000
 
     message = "At %(lat)s %(lng)s as of %(nice_time)s. " % i
-    if i['altitude'] > 0:
+    if 'altitude' in i.keys() and i['altitude'] > 0:
         message += "Altitude is %(altitude)i meters. " % i
 
     if i['kilometers_from_home'] > 2:
@@ -123,7 +123,7 @@ for i in response['entries']:
         message += "Currently at home. "
 
     if i['position_age'] > 30:
-        message += "Beaconing same posn for %(position_age)i seconds. " % i
+        message += "Beaconing same position for %(position_age)i seconds. " % i
 
     logging.info(title + ': ' + message)
 
