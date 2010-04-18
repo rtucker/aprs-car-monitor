@@ -37,13 +37,14 @@ if len(sys.argv) > 1:
         agelimit = 2**31
 
 if osd:
-    if not pynotify.init("summary-body"):
+    if not pynotify.init("aprs-notification"):
         sys.stderr.write("pynotify isn't happy\n")
         sys.exit(1)
 
     def notifyosd(title, message):
         """send a notification via pynotify"""
         n = pynotify.Notification(title, message)
+        n.set_timeout(10)
         n.show()
 else:
     def notifyosd(title, message):
