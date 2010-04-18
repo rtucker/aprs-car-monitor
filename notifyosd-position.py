@@ -7,10 +7,14 @@ Requires aprsfi.py from: http://github.com/rtucker/pyaprsfi
 """
 
 import aprsfi
+import dbus
+import logging
 import math
 import pynotify
 import sys
 import time
+
+logging.basicConfig(level=logging.DEBUG, stream=sys.stdout)
 
 try:
     import secrets
@@ -18,14 +22,46 @@ except ImportError:
     sys.stderr.write("Please copy secrets.py.dist to secrets.py and configure it to taste.\n")
     sys.exit(1)
 
-if not pynotify.init("summary-body"):
-    sys.stderr.write("pynotify isn't happy\n")
-    sys.exit(1)
+osd = True
+idlecheck = False
+agelimit = 2**31
 
-def notifyosd(title, message):
-    """send a notification via pynotify"""
-    n = pynotify.Notification(title, message)
-    n.show()
+if len(sys.argv) > 1:
+    if sys.argv[1] == 'auto':
+        osd = True
+        idlecheck = True
+        agelimit = 600
+    elif sys.argv[1] == 'text':
+        osd = False
+        idlecheck = False
+        agelimit = 2**31
+
+if osd:
+    if not pynotify.init("summary-body"):
+        sys.stderr.write("pynotify isn't happy\n")
+        sys.exit(1)
+
+    def notifyosd(title, message):
+        """send a notification via pynotify"""
+        n = pynotify.Notification(title, message)
+        logging.debug('Sending notify.\n')
+        n.show()
+else:
+    def notifyosd(title, message):
+        """send a notification via stdout"""
+        sys.stdout.write(title + ': ' + message + '\n')
+
+if idlecheck:
+    def isidle():
+        """checks to see if the console is idle via dbus/consolekit"""
+        bus = dbus.SystemBus()
+        manager_obj = bus.get_object ('org.freedesktop.ConsoleKit', '/org/freedesktop/ConsoleKit/Manager')
+        manager = dbus.Interface (manager_obj, 'org.freedesktop.ConsoleKit.Manager')
+        return manager.GetSystemIdleHint()
+else:
+    def isidle():
+        """idle checking disabled, so return false"""
+        return False
 
 def metersGeoDistance(lat1, lon1, lat2, lon2):
     """
@@ -45,6 +81,10 @@ def metersGeoDistance(lat1, lon1, lat2, lon2):
 
     return distance * metersPerNauticalMile
 
+if isidle():
+    logging.debug('Exiting due to system being idle.\n')
+    sys.exit(0)
+
 aprs = aprsfi.Api(key=secrets.APRS_FI_API_KEY)
 
 response = aprs.loc(name=secrets.MONITOR_CALLSIGN)
@@ -54,6 +94,10 @@ if response['found'] == 0:
     sys.exit(0)
 
 for i in response['entries']:
+    if int(i['lasttime']) < time.time()-agelimit:
+        logging.debug('Not displaying %(name)s due to it being too old\n' % i)
+        continue
+
     if i['speed'] > 0:
         title = "%(name)s is heading %(course)i degrees at %(speed)i km/h" % i
     else:
