@@ -44,7 +44,7 @@ if osd:
     def notifyosd(title, message):
         """send a notification via pynotify"""
         n = pynotify.Notification(title, message)
-        logging.debug('Sending notify.\n')
+        logging.debug('Sending notify: %s: %s' % (title, message))
         n.show()
 else:
     def notifyosd(title, message):
@@ -82,7 +82,7 @@ def metersGeoDistance(lat1, lon1, lat2, lon2):
     return distance * metersPerNauticalMile
 
 if isidle():
-    logging.debug('Exiting due to system being idle.\n')
+    logging.debug('Exiting due to system being idle.')
     sys.exit(0)
 
 aprs = aprsfi.Api(key=secrets.APRS_FI_API_KEY)
@@ -95,7 +95,7 @@ if response['found'] == 0:
 
 for i in response['entries']:
     if int(i['lasttime']) < time.time()-agelimit:
-        logging.debug('Not displaying %(name)s due to it being too old\n' % i)
+        logging.debug('Not displaying %(name)s due to it being too old' % i)
         continue
 
     if i['speed'] > 0:
