@@ -14,7 +14,7 @@ import pynotify
 import sys
 import time
 
-logging.basicConfig(level=logging.DEBUG, stream=sys.stdout)
+logging.basicConfig(level=logging.INFO, stream=sys.stdout)
 
 try:
     import secrets
@@ -44,7 +44,6 @@ if osd:
     def notifyosd(title, message):
         """send a notification via pynotify"""
         n = pynotify.Notification(title, message)
-        logging.debug('Sending notify: %s: %s' % (title, message))
         n.show()
 else:
     def notifyosd(title, message):
@@ -124,6 +123,8 @@ for i in response['entries']:
 
     if i['position_age'] > 30:
         message += "Beaconing same posn for %(position_age)i seconds. " % i
+
+    logging.info(title + ': ' + message)
 
     notifyosd(title, message)
 
