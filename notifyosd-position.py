@@ -38,8 +38,11 @@ if len(sys.argv) > 1:
 
 if osd:
     if not pynotify.init("aprs-notification"):
-        sys.stderr.write("pynotify isn't happy\n")
-        sys.exit(1)
+        if not idlecheck:
+            sys.stderr.write("pynotify isn't happy\n")
+            sys.exit(1)
+        else:
+            sys.exit(0)
 
     def notifyosd(title, message):
         """send a notification via pynotify"""
