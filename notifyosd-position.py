@@ -11,10 +11,16 @@ import dbus
 import logging
 import math
 import pynotify
+import pytz
 import sys
 import time
 
 logging.basicConfig(level=logging.INFO, stream=sys.stdout)
+
+try:
+    import darksky
+except ImportError:
+    darksky = None
 
 try:
     import secrets
@@ -90,45 +96,65 @@ if isidle():
 
 aprs = aprsfi.Api(key=secrets.APRS_FI_API_KEY)
 
-response = aprs.loc(name=secrets.MONITOR_CALLSIGN)
+if darksky:
+    ds = darksky.DarkSky(secrets.DARKSKY_API_KEY)
+else:
+    ds = None
 
-if response['found'] == 0:
-    notifyosd("Can't find " + secrets.MONITOR_CALLSIGN, "No results returned from aprs.fi")
-    sys.exit(0)
+for callsign in secrets.MONITOR_CALLSIGN:
+    response = aprs.loc(name=callsign)
 
-for i in response['entries']:
-    if int(i['lasttime']) < time.time()-agelimit:
-        logging.debug('Not displaying %(name)s due to it being too old' % i)
-        continue
+    if response['found'] == 0:
+        notifyosd("Can't find " + callsign, "No results returned from aprs.fi")
+        sys.exit(0)
 
-    if i['speed'] > 0:
-        title = "%(name)s is heading %(course)i degrees at %(speed)i km/h" % i
-    else:
-        title = "%(name)s: %(comment)s" % i
+    for i in response['entries']:
+        if int(i['lasttime']) < time.time()-agelimit:
+            logging.debug('Not displaying %(name)s due to it being too old' % i)
+            continue
 
-    i['position_age'] = int(i['lasttime']) - int(i['time'])
+        if i['speed'] > 0:
+            title = "%(name)s is heading %(course)i degrees at %(speed)i km/h" % i
+        else:
+            title = "%(name)s: %(comment)s" % i
 
-    i['nice_time'] = time.strftime('%b %d at %H:%M', time.localtime(int(i['time'])))
+        i['position_age'] = int(i['lasttime']) - int(i['time'])
 
-    i['meters_from_home'] = metersGeoDistance(secrets.HOME_LAT, secrets.HOME_LNG, float(i['lat']), float(i['lng']))
+        i['nice_time'] = time.strftime('%b %d at %H:%M', time.localtime(int(i['time'])))
 
-    i['kilometers_from_home'] = i['meters_from_home']/1000
+        i['meters_from_home'] = metersGeoDistance(secrets.HOME_LAT, secrets.HOME_LNG, float(i['lat']), float(i['lng']))
 
-    message = "At %(lat)s %(lng)s as of %(nice_time)s. " % i
-    if 'altitude' in i.keys() and i['altitude'] > 0:
-        message += "Altitude is %(altitude)i meters. " % i
+        i['kilometers_from_home'] = i['meters_from_home']/1000
 
-    if i['kilometers_from_home'] > 2:
-        message += "Currently %(kilometers_from_home)i km from home. " % i
-    elif i['meters_from_home'] > 100:
-        message += "Currently %(meters_from_home)i meters from home. " % i
-    else:
-        message += "Currently at home. "
+        message = "At %(lat)s %(lng)s as of %(nice_time)s.\n" % i
+        if 'altitude' in i.keys() and i['altitude'] > 0:
+            message += "Altitude is %(altitude)i meters.\n" % i
 
-    if i['position_age'] > 30:
-        message += "Beaconing same position for %(position_age)i seconds. " % i
+        if i['kilometers_from_home'] > 2:
+            message += "Currently %(kilometers_from_home)i km from home.\n" % i
+        elif i['meters_from_home'] > 100:
+            message += "Currently %(meters_from_home)i meters from home.\n" % i
+        else:
+            message += "Currently at home.\n"
 
-    logging.info(title + ': ' + message)
+        if i['position_age'] > 30:
+            message += "Beaconing same position for %(position_age)i seconds.\n" % i
 
-    notifyosd(title, message)
+        if ds:
+            wx = ds.getWeather(float(i['lat']), float(i['lng']))
+            try:
+                mytz = pytz.timezone(wx.timezone.split()[0])
+            except Exception:
+                mytz = pytz.UTC
+            message += "Forecast Powered by Dark Sky\n"
+            message += "Weather: %s, next hour: %s\n" % (wx.currentSummary, wx.hourSummary)
+            if wx.isPrecipitating:
+                message += "Intensity: %g dBZ\n" % wx.currentIntensity
+            if wx.minutesUntilChange > 0:
+                message += "Precip change at: %s\n" % (wx.getTimeToChange().replace(tzinfo=pytz.UTC).astimezone(mytz).strftime('%H:%M'))
+            if wx.checkTimeout > 0:
+                message += "Forecast valid until: %s\n" % (wx.getTimeToTimeout().replace(tzinfo=pytz.UTC).astimezone(mytz).strftime('%H:%M'))
 
+        logging.info(title + ': ' + message)
+
+        notifyosd(title, message)
